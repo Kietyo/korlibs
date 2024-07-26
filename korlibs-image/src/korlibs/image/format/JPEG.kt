@@ -20,7 +20,11 @@ object JPEG : ImageFormat("jpg", "jpeg") {
     }
 
     override fun readImageContainer(s: SyncStream, props: ImageDecodingProps): ImageDataContainer {
-        return ImageDataContainer(JPEGDecoder.decode(s.readAll()))
+        return ImageDataContainer(JPEGDecoder.decode(s.readAll(),
+            kotlin.run {
+                val out = props.out
+                if (out != null && out is Bitmap32) out else null
+            }))
     }
 
     override fun writeImageContainer(image: ImageDataContainer, s: SyncStream, props: ImageEncodingProps) {
@@ -1071,9 +1075,18 @@ class JPEGDecoder {
             return JPEGDecoder.ImageInfo(decoder.width, decoder.height)
         }
 
-        fun decode(jpegData: ByteArray): Bitmap32 {
+        fun decode(jpegData: ByteArray, out: Bitmap32? = null): Bitmap32 {
             val data = decodeToData(jpegData)
-            return RGBA.decodeToBitmap32(data.width, data.height, data.data.asByteArray())
+            val width = data.width
+            val height = data.height
+            val size = width * height
+            return if (out != null && out.width == width && out.height == height && out.ints.size == size) {
+                val outRgbaArray = RgbaArray(out.ints)
+                RGBA.decode(data.data.asByteArray(), 0, outRgbaArray, 0, size, true)
+                out
+            } else {
+                RGBA.decodeToBitmap32(data.width, data.height, data.data.asByteArray())
+            }
         }
 
         private fun decodeToData(jpegData: ByteArray): ImageData {
